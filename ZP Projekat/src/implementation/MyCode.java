@@ -13,10 +13,13 @@ import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator;
 import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v1CertificateBuilder;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.bc.BcX509v3CertificateBuilder;
+import org.bouncycastle.crypto.generators.RSAKeyPairGenerator;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
+import org.bouncycastle.jce.X509Principal;
 import org.bouncycastle.x509.extension.X509ExtensionUtil;
 import org.bouncycastle.x509.*;
 
@@ -33,15 +36,17 @@ import x509.v3.CodeV3;
 
 public class MyCode extends CodeV3 {
 	
-	private HashMap<String, X509Certificate> localKeyStore = new HashMap<>();
+	//private HashMap<String, X509Certificate> localKeyStore = new HashMap<>();
 	private KeyStore localKS;
-	private char[] password = "pn140041d".toCharArray();
-	private ProtectionParameter localPP = new KeyStore.PasswordProtection(password);
+	private static char[] password = "root".toCharArray();
+	private static ProtectionParameter localPP = new KeyStore.PasswordProtection(password);
+	private static String pathToLocalKS = "lks.p12";
+	
 	
 
 	public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf) throws GuiException {
 		super(algorithm_conf, extensions_conf);
-		// TODO Auto-generated constructor stub
+		
 	
 	
 	}
@@ -50,9 +55,9 @@ public class MyCode extends CodeV3 {
 	
 	@Override
 	public boolean exportCertificate(File arg0, int arg1) {
-		System.out.println("export certificate");
-		System.out.println(arg0 + " " + arg1);
-		System.out.println("---------\n");
+		
+		
+		
 		return false;
 	}
 
@@ -113,7 +118,7 @@ public class MyCode extends CodeV3 {
 			return null;
 		}
 		
-		return Data.getInfoIssuer(c.toString());
+		return c.getIssuerDN().toString().replace(", ", ",");
 		
 		
 		// ??????????? Jel se ovo ovako trazi
@@ -122,7 +127,7 @@ public class MyCode extends CodeV3 {
 	@Override
 	public String getIssuerPublicKeyAlgorithm(String arg0) {
 
-		System.out.println("---------\n");
+	
 		
 		if(arg0 == null || arg0.isEmpty()){
 			System.out.println("getIssuerPublicKeyAlgorithm was called with an null or '' string");
@@ -163,8 +168,27 @@ public class MyCode extends CodeV3 {
 
 	@Override
 	public List<String> getIssuers(String arg0) {
-
-
+		
+		Enumeration<String> aliases = null;
+		try {
+			aliases = localKS.aliases();
+		} catch (KeyStoreException ee) {
+		System.out.println("Error in getIssuers while getting aliases from localKS");
+			ee.printStackTrace();
+			return null;
+		}
+		
+		if(aliases == null){
+			System.out.println("Error in getIssuers - aliases is null");
+			return null;
+		}
+		
+		List<String> list = new ArrayList<>();
+		
+		for(String alias:Collections.list(aliases)){
+			
+		}
+		
 		
 		
 		return null;
@@ -184,7 +208,7 @@ public class MyCode extends CodeV3 {
 				return 0;
 			}
 		} catch (KeyStoreException e) {
-			// TODO Auto-generated catch block
+	
 			e.printStackTrace();
 		}
 		
@@ -192,7 +216,7 @@ public class MyCode extends CodeV3 {
 		try {
 			c = (X509Certificate) localKS.getCertificate(arg0);
 		} catch (KeyStoreException e) {
-			// TODO Auto-generated catch block
+			
 			e.printStackTrace();
 		}
 		
@@ -201,7 +225,7 @@ public class MyCode extends CodeV3 {
 			return 0;
 		}
 		
-		int ret = Data.length(c.getPublicKey().toString());
+		int ret = new BigInteger(c.getPublicKey().toString()).bitLength();
 		
 		System.out.println("getRSAKeyLength with key " + arg0+" returns "+ ret);
 		
@@ -238,7 +262,7 @@ public class MyCode extends CodeV3 {
 		         try {
 					inStream.close();
 				} catch (IOException e) {
-					// TODO Auto-generated catch block
+					
 					e.printStackTrace();
 				}
 		     }
@@ -254,12 +278,13 @@ public class MyCode extends CodeV3 {
 		 try {
 			localKS.setCertificateEntry(arg1, c);
 		} catch (KeyStoreException e) {
-			// TODO Auto-generated catch block
+	
 			e.printStackTrace();
+			return false;
 		}
 
 		 
-		return false;
+		return true;
 	}
 
 	@Override
@@ -287,23 +312,12 @@ public class MyCode extends CodeV3 {
 			return false;
 		}
 
-		File f = new File(arg1);
-		if (f == null || !f.exists() | !f.canRead()) {
-			System.out.println("input file error");
-			return false;
-
-		}
 
 		InputStream in = null;
 		try {
-			in = new FileInputStream(f);
+			in = new FileInputStream(arg1);
 		} catch (FileNotFoundException e1) {
 			System.out.println("Error file input stream");
-			return false;
-		}
-
-		if (in == null) {
-			System.out.println("input stream is null");
 			return false;
 		}
 
@@ -338,26 +352,31 @@ public class MyCode extends CodeV3 {
 			return false;
 		}
 		
-		
+		c = (X509Certificate) ((PrivateKeyEntry) e).getCertificate();
 		
 		try {
-			localKS.setEntry(arg0, e, localPP);
+			localKS.setKeyEntry(arg0, ((PrivateKeyEntry) e).getPrivateKey(), this.password, new Certificate[]{c});
 		} catch (KeyStoreException e1) {
-			
+		
 			e1.printStackTrace();
+			return false;
 		}
 		
 		
 
-		c = (X509Certificate) ((PrivateKeyEntry) e).getCertificate();
+		
 
 		System.out.println(c);
 		
-		c.getPublicKey().getAlgorithm();
+		try{
+		FileOutputStream fout = new FileOutputStream(pathToLocalKS);
+		localKS.store(fout, this.password);
+		fout.close();
+		}catch(Exception e2){
+			System.out.println("Error storing localKS to file");
+			
+		}
 		
-	
-		
-		System.out.println(c.getPublicKey().getAlgorithm());
 
 
 		return true;
@@ -373,27 +392,39 @@ public class MyCode extends CodeV3 {
 		// 2 == signed, disalbes sign button
 		// other unsigned - enables the sign button
 		
+		System.out.println(arg0);
+		
 		X509Certificate c = null;
 		try {
-			c = (X509Certificate) localKS.getCertificate(arg0);
-		} catch (KeyStoreException e) {
-			
-			
-			try{
-				
-				PrivateKeyEntry x = (PrivateKeyEntry)localKS.getEntry(arg0, localPP);
-				c = (X509Certificate)(x.getCertificate());
-			}catch(Exception ee){
-				ee.printStackTrace();
+						
+			c = (X509Certificate)localKS.getCertificate(arg0);
+			/*
+			if(localKS.isKeyEntry(arg0)){
+				Entry eeeee = localKS.getEntry(arg0, localPP);
+				PrivateKeyEntry x = (PrivateKeyEntry)eeeee;
+				Certificate cc= (x.getCertificate());
+				c = (X509Certificate)cc;
 			}
+			*/
+			
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
+		
+		
 		if(c == null){
 			System.out.println("Could not find "+arg0+" in localKeyStore");
 			return -1;
 		}
 		
-		access.setIssuer(Data.getInfoIssuer(c.toString()));
-		access.setIssuerSignatureAlgorithm("WHAT???"/*Data.getSignatureAlgorithm(c.toString())*/);
+		
+		
+		System.out.println(c.toString());
+		
+
+		
+		access.setIssuer(c.getIssuerDN().toString().replace(", ", ","));
+		access.setIssuerSignatureAlgorithm("WHAT????");
 		
 		access.setSerialNumber(""+c.getSerialNumber());
 		
@@ -405,17 +436,18 @@ public class MyCode extends CodeV3 {
 		
 				
 		
-		access.setSubject(Data.getInfoSubject(c.toString()));
-		access.setPublicKeySignatureAlgorithm(Data.getSignatureAlgorithm(c.toString()));
+		access.setSubject(c.getSubjectDN().toString().replace(", ", ","));
+		access.setPublicKeySignatureAlgorithm(c.getSigAlgName());
 		access.setPublicKeyParameter(""+Data.length(c.getPublicKey().toString()));
 		access.setPublicKeyAlgorithm(c.getPublicKey().getAlgorithm());
 
+		
+		if(c.getKeyUsage() != null)
 		access.setKeyUsage(c.getKeyUsage());
 	
 		// extended key usage
 		
-		
-		System.out.println(getIssuerPublicKeyAlgorithm(arg0));		
+
 
 		// TODO
 		
@@ -436,7 +468,7 @@ public class MyCode extends CodeV3 {
 		if(localKS == null){
 			try {
 				localKS = KeyStore.getInstance("pkcs12");
-				FileInputStream fin = new FileInputStream("lks.p12");
+				FileInputStream fin = new FileInputStream(pathToLocalKS);
 				localKS.load(fin, password);
 				fin.close();
 				
@@ -472,12 +504,24 @@ public class MyCode extends CodeV3 {
 		try {
 			if(localKS.isKeyEntry(arg0)){
 				localKS.deleteEntry(arg0);
+				try{
+					FileOutputStream fout = new FileOutputStream(pathToLocalKS);
+					localKS.store(fout, password);
+					fout.close();
+					}catch(Exception e){
+						System.out.println("Error storing localKS to file");
+						return false;
+					}
+				
 				return true;
 			}
 		} catch (KeyStoreException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		
 		}
+		
+
 		
 		return false;
 	}
@@ -513,15 +557,21 @@ public class MyCode extends CodeV3 {
 			return;
 		}
 		
-		while(aliases.hasMoreElements()){
+		for(String x: Collections.list(aliases)){
 			try {
-				System.out.println(aliases.toString());
-
-				localKS.deleteEntry(aliases.toString());
-				aliases.nextElement();
+				System.out.println(x);
+				localKS.deleteEntry(x);
 			} catch (Exception e) {
 				System.out.println("Exception in resetLocalKeystore aliases");
 			}
+		}
+		
+		try{
+		FileOutputStream fout = new FileOutputStream(pathToLocalKS);
+		localKS.store(fout, password);
+		fout.close();
+		}catch(Exception e){
+			System.out.println("Error storing localKS to file");
 		}
 		
 		
@@ -530,6 +580,7 @@ public class MyCode extends CodeV3 {
 	
 	// TODO
 
+	@SuppressWarnings(value = { "all" })
 	@Override
 	public boolean saveKeypair(String arg0) {
 		// called when "Save" is pressed
@@ -550,6 +601,8 @@ public class MyCode extends CodeV3 {
 			return false;
 		}
 		
+		System.out.println(arg0);
+		
 		String publicKeyAlgorithm = access.getPublicKeyAlgorithm();
 		String signatureAlgorithm = access.getPublicKeySignatureAlgorithm();
 		
@@ -561,6 +614,7 @@ public class MyCode extends CodeV3 {
 		KeyPairGenerator kpg = null;
 		try {
 			 kpg = KeyPairGenerator.getInstance(publicKeyAlgorithm);
+	
 		} catch (NoSuchAlgorithmException e) {
 				System.out.println("KeyPairGenerator exception in saveKeypair");
 				return false;
@@ -590,9 +644,7 @@ public class MyCode extends CodeV3 {
 		}
 		
 		PublicKey pk = kp.getPublic();
-		
-		PublicKeyFactory pkf = new PublicKeyFactory();
-		SubjectPublicKeyInfo s = new SubjectPublicKeyInfo()
+
 		
 		if(pk == null){
 			System.out.println("publickKey is null in saveKeypair");
@@ -605,7 +657,7 @@ public class MyCode extends CodeV3 {
 		// MessageDigest md = MessageDigest.getInstance("SHA-256", "ProviderC");
 		
 		
-		System.out.println(access.getSubject());
+		
 		
 		// TODO
 		
@@ -620,15 +672,76 @@ public class MyCode extends CodeV3 {
 		*/
 		
 		
-		X500Name issuer = new X500Name("NAMEOFTHEISSUER");
+
 		BigInteger serial = new BigInteger(access.getSerialNumber());
 		Date notB = access.getNotBefore();
 		Date notA = access.getNotAfter();
-		X500Name subject = new X500Name(access.getSubject());
-		RSAKeyParameters r = new RSAKeyParameters(false, pk.get);
-		BcX509v3CertificateBuilder xcb = new BcX509v3CertificateBuilder(issuer, serial, notB, notA, subject, pk);
 
-		return false;
+
+		X509V3CertificateGenerator certGen = new X509V3CertificateGenerator();
+		X509Principal              dnName = new X509Principal(access.getSubject());
+		System.out.println(access.getSubject());
+		certGen.setSerialNumber(serial);
+		certGen.setNotBefore(notB);
+		certGen.setNotAfter(notA);
+		certGen.setSubjectDN(dnName);                       
+		certGen.setPublicKey(kp.getPublic());
+		certGen.setSignatureAlgorithm(signatureAlgorithm);
+		
+		
+		
+		PrivateKey a = null;
+		try {
+			a = ((PrivateKeyEntry)localKS.getEntry("ETFrootCA", localPP)).getPrivateKey();
+			
+			
+			X509Principal x = new X509Principal(((X509Certificate)((PrivateKeyEntry)localKS.getEntry("ETFrootCA", localPP)).getCertificate()).getIssuerDN().toString());
+			certGen.setIssuerDN(x);
+		} catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e1) {
+			System.out.println("Havent found ETFrootCA to sign certificate in saveKeypair");
+			return false;
+		}
+		
+		X509Certificate cert = null;
+		try {
+	
+			cert = certGen.generate(a);
+		} catch (CertificateEncodingException | InvalidKeyException | IllegalStateException
+				| NoSuchAlgorithmException | SignatureException e) {
+			System.out.println("Exception in saveKeyPair");
+			e.printStackTrace();
+			return false;
+		}
+		
+		if(cert == null){
+			System.out.println("cert is null in saveKeypair");
+			return false;
+		}
+		System.out.println(cert.toString());
+		
+		
+		try {
+			// TODO certificatChain
+			localKS.setEntry(arg0, new PrivateKeyEntry(kp.getPrivate(),new Certificate[]{cert/*(X509Certificate)localKS.getCertificate("ETFrootCA")*/}), localPP);
+		} catch (KeyStoreException e) {
+			System.out.println("Exception while adding certificate in localKS in saveKeyPair");
+			e.printStackTrace();
+			return false;
+		}
+		
+		try{
+		FileOutputStream fout = new FileOutputStream(pathToLocalKS);
+		localKS.store(fout, password);
+		fout.close();
+		}catch(Exception e){
+			System.out.println("Error storing localKS to file");
+			return false;
+		}
+		
+		
+		
+
+		return true;
 	}
 	
 	// TODO
