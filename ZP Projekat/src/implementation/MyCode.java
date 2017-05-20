@@ -3,62 +3,37 @@ package implementation;
 import java.io.*;
 import java.math.BigInteger;
 
-import org.bouncycastle.*;
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1Integer;
-import org.bouncycastle.asn1.ASN1Primitive;
-import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.DERInteger;
-import org.bouncycastle.asn1.DERObjectIdentifier;
-import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.DEROutputStream;
-import org.bouncycastle.asn1.DERUTCTime;
 import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x500.X500NameBuilder;
-import org.bouncycastle.asn1.x500.style.BCStyle;
-import org.bouncycastle.asn1.x509.Extensions;
-import org.bouncycastle.asn1.x509.GeneralName;
-import org.bouncycastle.asn1.x509.GeneralNames;
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator;
-import org.bouncycastle.asn1.x509.X509Extensions;
-import org.bouncycastle.asn1.x509.X509Name;
+import org.bouncycastle.cert.CertIOException;
 import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.X509v1CertificateBuilder;
-import org.bouncycastle.cert.X509v3CertificateBuilder;
-import org.bouncycastle.cert.bc.BcX509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.crypto.generators.RSAKeyPairGenerator;
-import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
-import org.bouncycastle.crypto.params.RSAKeyParameters;
-import org.bouncycastle.crypto.util.PublicKeyFactory;
-import org.bouncycastle.jce.X509Principal;
+import org.bouncycastle.jce.X509KeyUsage;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.openssl.PEMWriter;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.bouncycastle.util.encoders.Base64Encoder;
-import org.bouncycastle.x509.extension.AuthorityKeyIdentifierStructure;
-import org.bouncycastle.x509.extension.X509ExtensionUtil;
-import org.bouncycastle.x509.*;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import java.security.interfaces.*;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier.*;
 import org.bouncycastle.asn1.*;
+import java.security.cert.*;
+import java.security.cert.Certificate;
+
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 
 import java.security.KeyStore.*;
 import java.security.*;
-import java.security.cert.*;
-import java.security.cert.Certificate;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
+import org.bouncycastle.asn1.x509.*;
+import org.bouncycastle.asn1.x509.Extension;
+
+import javax.security.auth.x500.X500Principal;
+import org.bouncycastle.cert.jcajce.*;
 
 import code.GuiException;
 import x509.v3.CodeV3;
-import org.bouncycastle.asn1.DEROutputStream;
 
 public class MyCode extends CodeV3 {
 
@@ -70,9 +45,11 @@ public class MyCode extends CodeV3 {
 
 	private String selectedAlias;
 
+	/*
 	static {
 		Security.addProvider(new BouncyCastleProvider());
 	}
+	*/
 
 	public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf) throws GuiException {
 		super(algorithm_conf, extensions_conf);
@@ -164,10 +141,39 @@ public class MyCode extends CodeV3 {
 
 	@Override
 	public boolean generateCSR(String arg0) {
-		System.out.println("generateCSR");
-		System.out.println("---------\n");
 
-		return false;
+		Entry e = null;
+		PrivateKey pr = null;
+		PublicKey pu = null;
+		try {
+			e = localKS.getEntry(arg0, localPP);
+			pr = ((PrivateKeyEntry) e).getPrivateKey();
+			pu = ((PrivateKeyEntry) e).getCertificate().getPublicKey();
+		} catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e1) {
+			e1.printStackTrace();
+			return false;
+		}
+
+		if (pr == null || pu == null) {
+			System.out.println("Error - private or public key is null");
+			return false;
+		}
+
+		PKCS10CertificationRequestBuilder p10Builder = new JcaPKCS10CertificationRequestBuilder(
+				new X500Principal("CN=Requested Test Certificate"), pu);
+		JcaContentSignerBuilder csBuilder = new JcaContentSignerBuilder("SHA256withRSA");
+		ContentSigner signer = null;
+		try {
+			signer = csBuilder.build(pr);
+		} catch (OperatorCreationException e1) {
+			e1.printStackTrace();
+		}
+
+		PKCS10CertificationRequest csr = p10Builder.build(signer);
+
+		System.out.println("generateCSR successfully finished");
+
+		return true;
 	}
 
 	@Override
@@ -263,25 +269,15 @@ public class MyCode extends CodeV3 {
 
 		List<String> list = new ArrayList<>();
 
-		Certificate etf;
-		try {
-			etf = localKS.getCertificate("ETFrootCA");
-		} catch (KeyStoreException e1) {
-			System.out.println("Exception while accessing  localKS for ETFrootCA in getIssuers");
-			e1.printStackTrace();
-			return null;
-		}
-
-		if (etf == null) {
-			System.out.println("Could not find ETFrootCA in getIssuers in localKS");
-			return null;
-		}
-
 		for (String alias : Collections.list(aliases)) {
 
-			/*
-			 * if(alias.equals(arg0)) continue;
-			 */
+			try {
+				if(!localKS.isKeyEntry(alias))
+					continue;
+			} catch (KeyStoreException e1) {
+				e1.printStackTrace();
+			}
+			
 			X509Certificate cert = null;
 			try {
 				cert = (X509Certificate) localKS.getCertificate(alias);
@@ -296,8 +292,8 @@ public class MyCode extends CodeV3 {
 			}
 
 			try {
-				cert.verify(etf.getPublicKey());
-				list.add(alias);
+				if (cert.getKeyUsage()[5])
+					list.add(alias);
 			} catch (Exception e) {
 			}
 
@@ -523,13 +519,8 @@ public class MyCode extends CodeV3 {
 		access.setPublicKeyParameter("" + getRSAKeyLength(arg0));
 		access.setPublicKeyAlgorithm(c.getPublicKey().getAlgorithm());
 
-		X509CertificateHolder cert = null;
-		try {
-			cert = new X509CertificateHolder(c.getEncoded());
-		} catch (CertificateEncodingException | IOException e) {
-			e.printStackTrace();
-		}
 
+		// critical
 		Collection<String> critical = c.getCriticalExtensionOIDs();
 		if (critical != null)
 			for (String s : critical) {
@@ -546,6 +537,7 @@ public class MyCode extends CodeV3 {
 				}
 			}
 
+		// Keyusage
 		if (c.getKeyUsage() != null)
 			access.setKeyUsage(c.getKeyUsage());
 
@@ -557,6 +549,7 @@ public class MyCode extends CodeV3 {
 		} catch (Exception e) {
 		}
 
+		// Alternative names
 		Collection<List<?>> l = null;
 		try {
 			l = c.getSubjectAlternativeNames();
@@ -566,29 +559,46 @@ public class MyCode extends CodeV3 {
 		}
 
 		if (l != null) {
-			Object[] a = l.toArray();
-			for (int i = 0; i < a.length; i++) {
-				access.setAlternativeName(i, a[i].toString());
-				System.out.println(a[i].toString());
-			}
+			StringBuilder sb = new StringBuilder();
+			for (List<?> a:l)
+					for(Object s:a)
+						if(s instanceof String)
+				sb.append((sb.length() == 0 ? "" : ",") +(s.toString()));
+			System.out.println(sb.toString());
+			access.setAlternativeName(5, sb.toString());
+		}
+		
+		
+		if(c.getExtensionValue("2.5.29.54") != null){
+		Extension ex = new Extension(new ASN1ObjectIdentifier("2.5.29.54"), false, c.getExtensionValue("2.5.29.54"));
+		
+
 		}
 
-		// TODO
-
-		// alternative names
-
-		/*
-		 * try { for (Certificate cc : localKS.getCertificateChain(arg0))
-		 * System.out.println(cc); } catch (Exception e) { e.printStackTrace();
-		 * }
-		 * 
-		 */
+	
+		 try { 
+				Certificate[] chain = localKS.getCertificateChain(arg0);
+				if(chain != null)
+					for (Certificate cc :chain )
+						System.out.println(cc);
+				} catch (Exception e) { e.printStackTrace();}
+		
 
 		if (c.getKeyUsage() != null && c.getKeyUsage()[5]) {
 			System.out.println("2");
 			return 2;
 		}
-
+		
+		if(c.getSubjectDN().toString().equals(c.getIssuerDN().toString())){
+			System.out.println(0);
+			return 0;
+		}
+		else{
+			System.out.println(1);
+			return 1;
+		}
+		
+		/*
 		try {
 			c.verify(c.getPublicKey());
 			System.out.println("0");
@@ -597,6 +607,7 @@ public class MyCode extends CodeV3 {
 			System.out.println("1");
 			return 1;
 		}
+		*/
 
 	}
 
@@ -768,36 +779,28 @@ public class MyCode extends CodeV3 {
 		Date notB = access.getNotBefore();
 		Date notA = access.getNotAfter();
 
-		
 		X500Name dnName = new X500Name(access.getSubject());
-		//certGen.setSerialNumber(serial);
-		//certGen.setNotBefore(notB);
-		//certGen.setNotAfter(notA);
-		//certGen.setSubjectDN(dnName);
-		//certGen.setPublicKey(kp.getPublic());
-		//certGen.setSignatureAlgorithm(signatureAlgorithm);
-		
+		// certGen.setSerialNumber(serial);
+		// certGen.setNotBefore(notB);
+		// certGen.setNotAfter(notA);
+		// certGen.setSubjectDN(dnName);
+		// certGen.setPublicKey(kp.getPublic());
+		// certGen.setSignatureAlgorithm(signatureAlgorithm);
+
 		/*
-		PrivateKey a = null;
-		PublicKey b = null;
-		X509Certificate xxx = null;
-		*/
-		X500Name x = null;
-		try {
-			/*
-			a = ((PrivateKeyEntry) localKS.getEntry("ETFrootCA", localPP)).getPrivateKey();
-			b = ((PrivateKeyEntry) localKS.getEntry("ETFrootCA", localPP)).getCertificate().getPublicKey();
-			xxx = (X509Certificate) ((PrivateKeyEntry) localKS.getEntry("ETFrootCA", localPP)).getCertificate();
-			*/
+		 * PrivateKey a = null; PublicKey b = null; X509Certificate xxx = null;
+		 */
+		X500Name x = dnName;/*
+	try{
 			x = new X500Name(
 					((X509Certificate) ((PrivateKeyEntry) localKS.getEntry("ETFrootCA", localPP)).getCertificate())
 							.getIssuerDN().toString().replace(",", ", "));
-			//certGen.setIssuerDN(x);
+			// certGen.setIssuerDN(x);
 		} catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e1) {
 			System.out.println("Havent found ETFrootCA to sign certificate in saveKeypair");
 			return false;
 		}
-
+		*/
 		/*
 		 * try { certGen.addExtension(X509Extensions.AuthorityKeyIdentifier,
 		 * false, new AuthorityKeyIdentifierStructure(xxx)); } catch
@@ -805,39 +808,93 @@ public class MyCode extends CodeV3 {
 		 * 
 		 */
 
+		JcaX509v3CertificateBuilder certGen = new JcaX509v3CertificateBuilder(x, serial, notB, notA, dnName,
+				kp.getPublic());
+
+		// KeyUsage
+		boolean[] b = access.getKeyUsage();
+		if (b != null) {
+			X509KeyUsage kUsage = new X509KeyUsage((b[0] ? X509KeyUsage.digitalSignature : 0)
+					| (b[1] ? X509KeyUsage.nonRepudiation : 0) | (b[2] ? X509KeyUsage.keyEncipherment : 0)
+					| (b[3] ? X509KeyUsage.dataEncipherment : 0) | (b[4] ? X509KeyUsage.keyAgreement : 0)
+					| (b[5] ? X509KeyUsage.keyCertSign : 0) | (b[6] ? X509KeyUsage.cRLSign : 0)
+					| (b[7] ? X509KeyUsage.encipherOnly : 0) | (b[8] ? X509KeyUsage.decipherOnly : 0));
+
+			try {
+				certGen.addExtension(new ASN1ObjectIdentifier("2.5.29.15"), access.isCritical(2), // keyusage
+						kUsage);
+			} catch (Exception e2) {
+				System.out.println("Exception adding keyusage to certGen");
+				e2.printStackTrace();
+			}
+		}
+
+		// Subject Alternate Names
+		String[] altNames = access.getAlternativeName(5);
+		if (altNames != null) {
+			GeneralName[] gn = new GeneralName[altNames.length];
+			System.out.println(altNames);
+			for (int i = 0; i < altNames.length; i++)
+				gn[i] = new GeneralName(2, altNames[i]);
+
+			try {
+				certGen.addExtension(Extension.subjectAlternativeName, access.isCritical(5), new GeneralNames(gn));
+			} catch (CertIOException e2) {
+				System.out.println("Exception failed to add extension for alternative names");
+				e2.printStackTrace();
+			}
+		}
 		
-		JcaX509v3CertificateBuilder certGen = new JcaX509v3CertificateBuilder(x, serial, notB, notA, dnName, kp.getPublic() );
-		 ContentSigner sigGen =null;
+		// Inhibit any policy
+		if(access.getInhibitAnyPolicy()){
+			
+			int skipCert = Integer.parseInt(access.getSkipCerts());
+			try {
+				certGen.addExtension(Extension.inhibitAnyPolicy, access.isCritical(13), new DERInteger(skipCert));
+			} catch (CertIOException e) {
+				System.out.println("Exception - failed to add extension for inhibit any policy");
+				e.printStackTrace();
+			}
+		}
+			
+			
+		 
+
+		/*
+		 * for(String s:altNames) try { System.out.println(s);
+		 * //certGen.addExtension(new ASN1ObjectIdentifier ("2.5.29.17"),
+		 * access.isCritical(5),new X500(s) ); } catch (CertIOException e2) {
+		 * System.out.println("Could not add sublect alternate names");
+		 * e2.printStackTrace(); }
+		 * 
+		 */
+
+		ContentSigner sigGen = null;
 		try {
 			sigGen = new JcaContentSignerBuilder(signatureAlgorithm)
-			         /*.setProvider(BC)*/.build(kp.getPrivate());
+					/* .setProvider(BC) */.build(kp.getPrivate());
 		} catch (OperatorCreationException e1) {
-			
+
 			e1.printStackTrace();
 			return false;
 		}
-		 X509Certificate cert = null;
+		X509Certificate cert = null;
 		try {
 			cert = new JcaX509CertificateConverter().getCertificate(certGen.build(sigGen));
 		} catch (CertificateException e1) {
-
 			e1.printStackTrace();
 			return false;
 		}
 
-		 /*
-		X509Certificate cert = null;
-		try {
-
-			cert = certGen.generateX509Certificate(a, "BC");
-			cert.verify(b);
-		} catch (InvalidKeyException | IllegalStateException | NoSuchAlgorithmException | SignatureException
-				| CertificateException | NoSuchProviderException e) {
-			System.out.println("Exception in saveKeyPair");
-			e.printStackTrace();
-			return false;
-		}
-		*/
+		/*
+		 * X509Certificate cert = null; try {
+		 * 
+		 * cert = certGen.generateX509Certificate(a, "BC"); cert.verify(b); }
+		 * catch (InvalidKeyException | IllegalStateException |
+		 * NoSuchAlgorithmException | SignatureException | CertificateException
+		 * | NoSuchProviderException e) { System.out.println(
+		 * "Exception in saveKeyPair"); e.printStackTrace(); return false; }
+		 */
 
 		if (cert == null) {
 			System.out.println("cert is null in saveKeypair");
@@ -846,17 +903,17 @@ public class MyCode extends CodeV3 {
 		System.out.println(cert.toString());
 
 		/*
-		System.out.println("cert issuer = " + cert.getIssuerDN());
-		System.out.println("xxx subject = " + xxx.getSubjectDN());
-		*/
-		
+		 * System.out.println("cert issuer = " + cert.getIssuerDN());
+		 * System.out.println("xxx subject = " + xxx.getSubjectDN());
+		 */
+
 		try {
 			// TODO certificatChain
 			// localKS.setKeyEntry(arg0, new PrivateKeyEntry(kp.getPrivate(),new
 			// Certificate[]{ cert, localKS.getCertificate("ETFrootCA")}),
 			// localPP);
 
-			localKS.setKeyEntry(arg0, kp.getPrivate(), this.password, new X509Certificate[] { cert});
+			localKS.setKeyEntry(arg0, kp.getPrivate(), this.password, new X509Certificate[] { cert });
 		} catch (Exception e) {
 			System.out.println("Exception while adding certificate in localKS in saveKeyPair");
 			e.printStackTrace();
@@ -879,9 +936,188 @@ public class MyCode extends CodeV3 {
 
 	@Override
 	public boolean signCertificate(String arg0, String arg1) {
-		System.out.println("sign certificate");
-		System.out.println("---------\n");
-		return false;
+		
+		if(arg0 == null || arg1 == null){
+			System.out.println("Invalid arguments in signCertificate");
+			return false;
+		}
+		
+		X509Certificate old = null;
+		
+		try {
+			old = (X509Certificate)localKS.getCertificate(selectedAlias);
+		} catch (KeyStoreException e) {
+			e.printStackTrace();
+			return false;
+		}
+		
+		if(old == null){
+			System.out.println("Certificate witl alias "+selectedAlias+" could not be located in the localKS");
+			return false;
+		}
+		
+		PrivateKey pr = null;
+		Certificate[] issuerChain = null;
+		PublicKey pub = null;
+		
+		try {
+			pr = ((PrivateKeyEntry)localKS.getEntry(arg0, localPP)).getPrivateKey();
+			pub = ((PrivateKeyEntry)localKS.getEntry(arg0, localPP)).getCertificate().getPublicKey();
+			issuerChain = ((PrivateKeyEntry)localKS.getEntry(arg0, localPP)).getCertificateChain();
+		} catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e) {
+			e.printStackTrace();
+			return false;
+		}
+		
+		if(pr == null || issuerChain == null){
+			System.out.println("Error - private key of entry "+arg0+" is null");
+			return false;
+		}
+		
+		
+		
+		String publicKeyAlgorithm = old.getPublicKey().getAlgorithm();	//access.getPublicKeyAlgorithm(); 
+		String signatureAlgorithm = arg1;								//access.getPublicKeySignatureAlgorithm();
+
+		if (publicKeyAlgorithm == null || signatureAlgorithm == null) {
+			System.out.println("public ketAlgorithm or signature algorithm are null");
+			return false;
+		}
+
+		
+
+		int keySize = getRSAKeyLength(selectedAlias);	
+
+		PublicKey pk = old.getPublicKey();
+
+		if (pk == null) {
+			System.out.println("publickKey is null in saveKeypair");
+			return false;
+		}
+		
+		BigInteger serial = old.getSerialNumber();							//new BigInt(access.getSerialNumber()));
+		Date notB =	old.getNotBefore();														// access.getNotBefore();
+		Date notA = old.getNotAfter();														//access.getNotAfter();
+
+																			//X500Name dnName = new X500Name(access.getSubject()); 
+		X500Principal dnName = new X500Principal(old.getSubjectDN().toString().replace(",",", "));
+		X500Principal x = new X500Principal(((X509Certificate)issuerChain[0]).getSubjectDN().toString());
+		
+		Set<String> set = old.getCriticalExtensionOIDs();
+		
+		
+	
+	
+		JcaX509v3CertificateBuilder certGen = new JcaX509v3CertificateBuilder(x, serial, notB, notA, dnName,pk);
+
+			// KeyUsage
+			boolean[] b = old.getKeyUsage();									//access.getKeyUsage();
+			if (b != null) {
+				X509KeyUsage kUsage = new X509KeyUsage((b[0] ? X509KeyUsage.digitalSignature : 0)
+						| (b[1] ? X509KeyUsage.nonRepudiation : 0) | (b[2] ? X509KeyUsage.keyEncipherment : 0)
+						| (b[3] ? X509KeyUsage.dataEncipherment : 0) | (b[4] ? X509KeyUsage.keyAgreement : 0)
+						| (b[5] ? X509KeyUsage.keyCertSign : 0) | (b[6] ? X509KeyUsage.cRLSign : 0)
+						| (b[7] ? X509KeyUsage.encipherOnly : 0) | (b[8] ? X509KeyUsage.decipherOnly : 0));
+				
+				
+				try {
+					certGen.addExtension(new ASN1ObjectIdentifier("2.5.29.15"),(set != null && set.contains("2.5.29.15")?true:false), // keyusage
+							kUsage);
+				} catch (Exception e2) {
+					System.out.println("Exception adding keyusage to certGen");
+					e2.printStackTrace();
+				}
+			}
+
+			// Subject Alternate Names
+			Collection<List<?>> col = null;
+			try {
+				col = old.getSubjectAlternativeNames();
+			} catch (CertificateParsingException e3) {
+				e3.printStackTrace();
+			}												// access.getAlternativeName(5);
+
+			if (col != null) {
+				List<?>[] arr =new List<?>[col.size()];
+				col.toArray(arr);
+				GeneralName[] gn = new GeneralName[col.size()];
+				for (int i = 0; i < col.size(); i++){
+					gn[i] = new GeneralName(2, (String)arr[i].get(1));
+				}
+
+				try {
+					certGen.addExtension(Extension.subjectAlternativeName, (set!=null && set.contains("2.5.29.17")?true:false), new GeneralNames(gn));
+				} catch (CertIOException e2) {
+					System.out.println("Exception failed to add extension for alternative names");
+					e2.printStackTrace();
+				}
+			}
+			
+			// Inhibit any policy
+			//	TODO
+				
+
+			ContentSigner sigGen = null;
+			try {
+				sigGen = new JcaContentSignerBuilder(signatureAlgorithm)
+						/* .setProvider(BC) */.build(pr);
+			} catch (OperatorCreationException e1) {
+
+				e1.printStackTrace();
+				return false;
+			}
+			X509Certificate cert = null;
+			try {
+				cert = new JcaX509CertificateConverter().getCertificate(certGen.build(sigGen));
+			} catch (CertificateException e1) {
+				e1.printStackTrace();
+				return false;
+			}
+
+
+			if (cert == null) {
+				System.out.println("cert is null in saveKeypair");
+				return false;
+			}
+			System.out.println(cert.toString());
+
+			try {
+				Certificate[] chain = new Certificate[issuerChain.length+1];
+				for(int i=0; i<issuerChain.length; i++)
+					chain[i+1] = issuerChain[i];
+				chain[0] = cert;
+				
+				System.out.println(x);
+				System.out.println(cert.getIssuerDN());
+				System.out.println(((X509Certificate)chain[1]).getSubjectDN());
+				
+				cert.checkValidity(new Date());
+				cert.verify(pub);
+				//localKS.setKeyEntry(arg0, kp.getPrivate(), this.password, chain);
+				if(localKS.isKeyEntry(selectedAlias)){
+					PrivateKeyEntry e = (PrivateKeyEntry) localKS.getEntry(selectedAlias,localPP );
+					localKS.setKeyEntry(selectedAlias, e.getPrivateKey(), this.password, chain);
+				}
+				else{
+					localKS.setCertificateEntry(selectedAlias, cert);
+				}
+			} catch (Exception e) {
+				System.out.println("Exception while adding certificate in localKS in saveKeyPair");
+				e.printStackTrace();
+				return false;
+			}
+
+			try {
+				FileOutputStream fout = new FileOutputStream(pathToLocalKS);
+				localKS.store(fout, password);
+				fout.close();
+			} catch (Exception e) {
+				System.out.println("Error storing localKS to file");
+				return false;
+			}
+
+			return true;
+
 	}
 
 }
