@@ -2,6 +2,10 @@ package implementation;
 
 import java.io.*;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.CertIOException;
@@ -45,11 +49,11 @@ public class MyCode extends CodeV3 {
 
 	private String selectedAlias;
 
-	/*
+	
 	static {
 		Security.addProvider(new BouncyCastleProvider());
 	}
-	*/
+	
 
 	public MyCode(boolean[] algorithm_conf, boolean[] extensions_conf) throws GuiException {
 		super(algorithm_conf, extensions_conf);
@@ -118,13 +122,24 @@ public class MyCode extends CodeV3 {
 			e1.printStackTrace();
 			return false;
 		}
-
-		arg1 += ".p12";
-
+		
+		
+	
+		
+		FileInputStream fin = null;
 		try {
+						
 			KeyStore ks = KeyStore.getInstance("pkcs12");
-			ks.load(null, null);
+			
+			if(Files.exists(FileSystems.getDefault().getPath(arg1))){
+				fin = new FileInputStream(arg1);
+				ks.load(fin, arg2.toCharArray());
+				fin.close();
+			}
+			else 
+				ks.load(null, null);
 			ks.setEntry(arg0, e, new PasswordProtection(arg2.toCharArray()));
+			
 			FileOutputStream fout = new FileOutputStream(arg1);
 			ks.store(fout, arg2.toCharArray());
 			fout.close();
@@ -145,10 +160,12 @@ public class MyCode extends CodeV3 {
 		Entry e = null;
 		PrivateKey pr = null;
 		PublicKey pu = null;
+		X509Certificate c = null;
 		try {
 			e = localKS.getEntry(arg0, localPP);
 			pr = ((PrivateKeyEntry) e).getPrivateKey();
 			pu = ((PrivateKeyEntry) e).getCertificate().getPublicKey();
+			c = (X509Certificate) ((PrivateKeyEntry) e).getCertificate();
 		} catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e1) {
 			e1.printStackTrace();
 			return false;
@@ -159,9 +176,10 @@ public class MyCode extends CodeV3 {
 			return false;
 		}
 
+		
 		PKCS10CertificationRequestBuilder p10Builder = new JcaPKCS10CertificationRequestBuilder(
-				new X500Principal("CN=Requested Test Certificate"), pu);
-		JcaContentSignerBuilder csBuilder = new JcaContentSignerBuilder("SHA256withRSA");
+				new X500Principal( c.getSubjectDN().toString()), pu);
+		JcaContentSignerBuilder csBuilder = new JcaContentSignerBuilder(c.getSigAlgName());
 		ContentSigner signer = null;
 		try {
 			signer = csBuilder.build(pr);
@@ -505,7 +523,7 @@ public class MyCode extends CodeV3 {
 		System.out.println(c.toString());
 
 		access.setIssuer(c.getIssuerDN().toString().replace(", ", ","));
-		access.setIssuerSignatureAlgorithm("WHAT????");
+		access.setIssuerSignatureAlgorithm(c.getSigAlgName());
 
 		access.setSerialNumber("" + c.getSerialNumber());
 
@@ -513,6 +531,8 @@ public class MyCode extends CodeV3 {
 
 		access.setNotBefore(c.getNotBefore());
 		access.setNotAfter(c.getNotAfter());
+		
+		
 
 		access.setSubject(c.getSubjectDN().toString().replace(", ", ","));
 		access.setPublicKeySignatureAlgorithm(c.getSigAlgName());
@@ -541,6 +561,7 @@ public class MyCode extends CodeV3 {
 		if (c.getKeyUsage() != null)
 			access.setKeyUsage(c.getKeyUsage());
 
+		// inhibit any policy
 		try {
 			byte[] b = c.getExtensionValue("2.5.29.54");
 			if (b != null)
@@ -569,18 +590,23 @@ public class MyCode extends CodeV3 {
 		}
 		
 		
-		if(c.getExtensionValue("2.5.29.54") != null){
-		Extension ex = new Extension(new ASN1ObjectIdentifier("2.5.29.54"), false, c.getExtensionValue("2.5.29.54"));
 		
-
+		byte[] a = c.getExtensionValue("2.5.29.54");
+		if( a!= null){
+			System.out.println("inhib");
+			for(byte b:a)
+				System.out.println(b);
+			access.setSkipCerts(""+getSkipCert(a));
 		}
 
-	
+		
 		 try { 
 				Certificate[] chain = localKS.getCertificateChain(arg0);
-				if(chain != null)
+				if(chain != null){
+					System.out.println("chain legth " + chain.length);
 					for (Certificate cc :chain )
 						System.out.println(cc);
+				}
 				} catch (Exception e) { e.printStackTrace();}
 		
 
@@ -761,7 +787,6 @@ public class MyCode extends CodeV3 {
 
 		// MessageDigest md = MessageDigest.getInstance("SHA-256", "ProviderC");
 
-		// TODO
 
 		/*
 		 * V3TBSCertificateGenerator certGen = new V3TBSCertificateGenerator();
@@ -813,7 +838,7 @@ public class MyCode extends CodeV3 {
 
 		// KeyUsage
 		boolean[] b = access.getKeyUsage();
-		if (b != null) {
+		if (b != null && access.isCritical(2)) {
 			X509KeyUsage kUsage = new X509KeyUsage((b[0] ? X509KeyUsage.digitalSignature : 0)
 					| (b[1] ? X509KeyUsage.nonRepudiation : 0) | (b[2] ? X509KeyUsage.keyEncipherment : 0)
 					| (b[3] ? X509KeyUsage.dataEncipherment : 0) | (b[4] ? X509KeyUsage.keyAgreement : 0)
@@ -831,7 +856,7 @@ public class MyCode extends CodeV3 {
 
 		// Subject Alternate Names
 		String[] altNames = access.getAlternativeName(5);
-		if (altNames != null) {
+		if (altNames != null && altNames.length !=0) {
 			GeneralName[] gn = new GeneralName[altNames.length];
 			System.out.println(altNames);
 			for (int i = 0; i < altNames.length; i++)
@@ -872,7 +897,7 @@ public class MyCode extends CodeV3 {
 		ContentSigner sigGen = null;
 		try {
 			sigGen = new JcaContentSignerBuilder(signatureAlgorithm)
-					/* .setProvider(BC) */.build(kp.getPrivate());
+					.setProvider("BC").build(kp.getPrivate());
 		} catch (OperatorCreationException e1) {
 
 			e1.printStackTrace();
@@ -900,7 +925,13 @@ public class MyCode extends CodeV3 {
 			System.out.println("cert is null in saveKeypair");
 			return false;
 		}
+		
 		System.out.println(cert.toString());
+		
+
+		
+		
+		
 
 		/*
 		 * System.out.println("cert issuer = " + cert.getIssuerDN());
@@ -1012,7 +1043,7 @@ public class MyCode extends CodeV3 {
 
 			// KeyUsage
 			boolean[] b = old.getKeyUsage();									//access.getKeyUsage();
-			if (b != null) {
+			if (b != null && set.contains("2.5.29.15")) {
 				X509KeyUsage kUsage = new X509KeyUsage((b[0] ? X509KeyUsage.digitalSignature : 0)
 						| (b[1] ? X509KeyUsage.nonRepudiation : 0) | (b[2] ? X509KeyUsage.keyEncipherment : 0)
 						| (b[3] ? X509KeyUsage.dataEncipherment : 0) | (b[4] ? X509KeyUsage.keyAgreement : 0)
@@ -1037,7 +1068,7 @@ public class MyCode extends CodeV3 {
 				e3.printStackTrace();
 			}												// access.getAlternativeName(5);
 
-			if (col != null) {
+			if (col != null && col.size()>0) {
 				List<?>[] arr =new List<?>[col.size()];
 				col.toArray(arr);
 				GeneralName[] gn = new GeneralName[col.size()];
@@ -1054,7 +1085,15 @@ public class MyCode extends CodeV3 {
 			}
 			
 			// Inhibit any policy
-			//	TODO
+			byte[] a = old.getExtensionValue("2.5.29.54");
+			if( a!= null){
+	
+				try {
+					certGen.addExtension(Extension.inhibitAnyPolicy, (set!=null && set.contains("2.5.29.54")?true:false), new DERInteger(getSkipCert(a)));
+				} catch (CertIOException e) {
+					e.printStackTrace();
+				}
+			}
 				
 
 			ContentSigner sigGen = null;
@@ -1118,6 +1157,35 @@ public class MyCode extends CodeV3 {
 
 			return true;
 
+	}
+	
+	private long getSkipCert(byte[] b){
+		if(b == null || b.length == 1){
+			System.out.println("Error byte array in getSkipCert is null or has length of 1");
+			return -1;
+		}
+		
+		int begin = b.length-2;
+		while(begin >=0 && b.length-begin-1 != b[begin])
+			begin--;
+		
+		if(begin <0){
+			System.out.println("invalid - begin < 0");
+			return -2;
+		}
+		byte[] arr = new byte[8];
+	
+		
+		for(int i = 8-b[begin++]; begin <b.length; begin++, i++)
+			arr[i] = b[begin];
+			
+		
+		ByteBuffer wrapped = ByteBuffer.wrap(arr); // big-endian by default
+		long ret = wrapped.getLong();
+
+		System.out.println("returning " + ret);
+		return ret;
+		
 	}
 
 }
