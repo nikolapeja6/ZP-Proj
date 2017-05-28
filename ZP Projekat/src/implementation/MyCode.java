@@ -109,7 +109,7 @@ public class MyCode extends CodeV3 {
 		return true;
 	}
 
-	// TODO
+	
 
 	@Override
 	public boolean exportKeypair(String arg0, String arg1, String arg2) {
@@ -156,6 +156,8 @@ public class MyCode extends CodeV3 {
 
 	@Override
 	public boolean generateCSR(String arg0) {
+		
+		System.out.println(arg0);
 
 		Entry e = null;
 		PrivateKey pr = null;
@@ -188,6 +190,7 @@ public class MyCode extends CodeV3 {
 		}
 
 		PKCS10CertificationRequest csr = p10Builder.build(signer);
+		
 
 		System.out.println("generateCSR successfully finished");
 
@@ -266,7 +269,7 @@ public class MyCode extends CodeV3 {
 
 	}
 
-	// TODO
+	
 
 	@Override
 	public List<String> getIssuers(String arg0) {
@@ -356,7 +359,7 @@ public class MyCode extends CodeV3 {
 
 	}
 
-	// TODO
+	
 
 	@Override
 	public boolean importCertificate(File arg0, String arg1) {
@@ -494,6 +497,8 @@ public class MyCode extends CodeV3 {
 		return true;
 	}
 
+	// TODO
+	
 	@Override
 	public int loadKeypair(String arg0) {
 
@@ -557,7 +562,7 @@ public class MyCode extends CodeV3 {
 				}
 			}
 
-		// Keyusage
+		// KeyUsage
 		if (c.getKeyUsage() != null)
 			access.setKeyUsage(c.getKeyUsage());
 
@@ -725,6 +730,8 @@ public class MyCode extends CodeV3 {
 
 	}
 
+	
+	// TODO
 	@SuppressWarnings(value = { "all" })
 	@Override
 	public boolean saveKeypair(String arg0) {
@@ -939,7 +946,7 @@ public class MyCode extends CodeV3 {
 		 */
 
 		try {
-			// TODO certificatChain
+			
 			// localKS.setKeyEntry(arg0, new PrivateKeyEntry(kp.getPrivate(),new
 			// Certificate[]{ cert, localKS.getCertificate("ETFrootCA")}),
 			// localPP);
