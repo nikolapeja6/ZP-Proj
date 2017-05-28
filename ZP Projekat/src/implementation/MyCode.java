@@ -676,11 +676,17 @@ public class MyCode extends CodeV3 {
 	public Enumeration<String> loadLocalKeystore() {
 		System.out.println("load local keystore");
 
+		
+		
 		try {
 			localKS = KeyStore.getInstance("pkcs12");
+			File f = new File(pathToLocalKS);
+			if(f.exists() && f.canRead()){
 			FileInputStream fin = new FileInputStream(pathToLocalKS);
 			localKS.load(fin, password);
-			fin.close();
+			fin.close();}
+			else
+				localKS.load(null, null);
 
 		} catch (Exception e) {
 			System.out.println("localKeyStore exception in constructor");
