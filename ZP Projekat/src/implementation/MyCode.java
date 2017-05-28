@@ -586,10 +586,40 @@ public class MyCode extends CodeV3 {
 
 		if (l != null) {
 			StringBuilder sb = new StringBuilder();
-			for (List<?> a:l)
-					for(Object s:a)
-						if(s instanceof String)
-				sb.append((sb.length() == 0 ? "" : ",") +(s.toString()));
+			for (List<?> a:l){
+				int type = Integer.parseInt(a.get(0).toString());
+				String s = (String)(a.get(1).toString());
+				switch(type){
+				case 0: 
+					s = "other="+s;
+					break;
+				case 1: 
+					s = "rfc822Name="+s;
+					break;
+				case 2: 
+					s = "dNSName="+s;
+					break;
+				case 3: 
+					s = "x400Address="+s;
+					break;
+				case 4: 
+					s = "directoryName="+s;
+					break;
+				case 5:
+					s = "ediPartyName="+s;
+					break;
+				case 6: 
+					s = "uniformResourceIdentifier="+s;
+					break;
+				case 7:
+					s = "iPAddress="+s;
+					break;
+				case 8:
+					s = "registeredID="+s;
+					break;
+				}
+				sb.append((sb.length() == 0 ? "" : ",") +s);
+			}
 			System.out.println(sb.toString());
 			access.setAlternativeName(5, sb.toString());
 		}
@@ -864,13 +894,47 @@ public class MyCode extends CodeV3 {
 		// Subject Alternate Names
 		String[] altNames = access.getAlternativeName(5);
 		if (altNames != null && altNames.length !=0) {
-			GeneralName[] gn = new GeneralName[altNames.length];
+			List<GeneralName> g = new ArrayList<>();
 			System.out.println(altNames);
-			for (int i = 0; i < altNames.length; i++)
-				gn[i] = new GeneralName(2, altNames[i]);
+			for (int i = 0; i < altNames.length; i++){
+				String[] parts = altNames[i].split("=");
+				switch(parts[0]){
+				case "other": 
+					break;
+					//gn[i] = new GeneralName(0, parts[1]); break;
+				
+				case "rfc822Name":
+					g.add(new GeneralName(GeneralName.rfc822Name, parts[1])); break;
+				
+				case "dNSName": 
+					g.add(new GeneralName(GeneralName.dNSName, parts[1])); break;
+
+				case "x400Address": 
+					break;
+					//gn[i] = new GeneralName(GeneralName.x400Address, parts[1]); break;
+
+				case "directoryName": 
+					g.add(new GeneralName(GeneralName.directoryName, parts[1])); break;
+
+				case "editPartyName":
+					break;
+					//gn[i] = new GeneralName(GeneralName.ediPartyName, parts[1]); break;
+
+				case "uniformResourceIdentifier":
+					g.add(new GeneralName(GeneralName.uniformResourceIdentifier, parts[1])); break;
+
+				case "iPAddress":
+					g.add(new GeneralName(GeneralName.iPAddress, parts[1])); break;
+
+				case "registeredID":
+					g.add(new GeneralName(GeneralName.registeredID, parts[1])); break;
+
+
+				}
+			}
 
 			try {
-				certGen.addExtension(Extension.subjectAlternativeName, access.isCritical(5), new GeneralNames(gn));
+				certGen.addExtension(Extension.subjectAlternativeName, access.isCritical(5), new GeneralNames(g.toArray(new GeneralName[g.size()])));
 			} catch (CertIOException e2) {
 				System.out.println("Exception failed to add extension for alternative names");
 				e2.printStackTrace();
@@ -1080,7 +1144,7 @@ public class MyCode extends CodeV3 {
 				col.toArray(arr);
 				GeneralName[] gn = new GeneralName[col.size()];
 				for (int i = 0; i < col.size(); i++){
-					gn[i] = new GeneralName(2, (String)arr[i].get(1));
+					gn[i] = new GeneralName(Integer.parseInt(arr[i].get(0).toString()), (String)arr[i].get(1));
 				}
 
 				try {
